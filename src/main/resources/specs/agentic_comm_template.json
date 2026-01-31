@@ -1,0 +1,359 @@
+{
+  "workflowId": "comm_template_agentic",
+  "version": 1,
+  "maxParallelNodes": 2,
+  "mergeStrategy": "DETERMINISTIC",
+  "failureStrategy": "FAIL_FAST",
+  "nodes": [
+    {
+      "id": "planner",
+      "type": "PLANNER",
+      "name": "AI Planner - Initial Plan",
+      "inputs": {
+        "eventType": "required",
+        "channel": "required",
+        "locale": "required"
+      },
+      "outputs": {
+        "plan": "object",
+        "updatedDagSpec": "object"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 120,
+        "scheduleToCloseSeconds": 600
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 2
+      }
+    },
+    {
+      "id": "validate",
+      "type": "VALIDATE",
+      "name": "Validate Request",
+      "inputs": {
+        "eventType": "required",
+        "channel": "required",
+        "locale": "required"
+      },
+      "outputs": {
+        "isValid": "boolean",
+        "validationErrors": "array"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 60,
+        "scheduleToCloseSeconds": 300
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 2
+      }
+    },
+    {
+      "id": "governance",
+      "type": "GOVERNANCE",
+      "name": "Governance & Compliance Check",
+      "inputs": {
+        "eventType": "ref(validate.eventType)",
+        "channel": "ref(validate.channel)"
+      },
+      "outputs": {
+        "complianceApproved": "boolean",
+        "disclaimers": "array"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": true
+      },
+      "timeouts": {
+        "startToCloseSeconds": 60,
+        "scheduleToCloseSeconds": 300
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 2
+      }
+    },
+    {
+      "id": "retrieve",
+      "type": "RETRIEVE",
+      "name": "Retrieve Templates & Brand Rules",
+      "inputs": {
+        "eventType": "ref(validate.eventType)",
+        "locale": "ref(validate.locale)"
+      },
+      "outputs": {
+        "templates": "object",
+        "brandRules": "object"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 120,
+        "scheduleToCloseSeconds": 600
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 2,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 3
+      }
+    },
+    {
+      "id": "template_map",
+      "type": "TEMPLATE_MAP",
+      "name": "Map Template & Fill Placeholders",
+      "inputs": {
+        "eventType": "ref(validate.eventType)",
+        "channel": "ref(validate.channel)"
+      },
+      "outputs": {
+        "selectedTemplate": "object",
+        "filledContent": "string"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 60,
+        "scheduleToCloseSeconds": 300
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 2
+      }
+    },
+    {
+      "id": "transform",
+      "type": "TRANSFORM",
+      "name": "Transform & Validate Variants",
+      "inputs": {
+        "filledContent": "ref(template_map.filledContent)",
+        "channel": "ref(validate.channel)"
+      },
+      "outputs": {
+        "shortVariant": "string",
+        "longVariant": "string",
+        "smsLimited": "string"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 60,
+        "scheduleToCloseSeconds": 300
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 2
+      }
+    },
+    {
+      "id": "decide",
+      "type": "DECIDE",
+      "name": "Decide Best Variant",
+      "inputs": {
+        "channel": "ref(validate.channel)",
+        "shortVariant": "ref(transform.shortVariant)",
+        "longVariant": "ref(transform.longVariant)",
+        "smsLimited": "ref(transform.smsLimited)"
+      },
+      "outputs": {
+        "selectedVariant": "string",
+        "selectionReason": "string"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 60,
+        "scheduleToCloseSeconds": 300
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 2
+      }
+    },
+    {
+      "id": "action",
+      "type": "ACTION",
+      "name": "Send Communication",
+      "inputs": {
+        "content": "ref(decide.selectedVariant)",
+        "channel": "ref(validate.channel)"
+      },
+      "outputs": {
+        "messageId": "string",
+        "sendStatus": "string"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 120,
+        "scheduleToCloseSeconds": 600
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 2,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 3
+      },
+      "compensationNodeId": "action_compensation"
+    },
+    {
+      "id": "finalize",
+      "type": "FINALIZE",
+      "name": "Finalize & Audit",
+      "inputs": {
+        "messageId": "ref(action.messageId)",
+        "content": "ref(decide.selectedVariant)"
+      },
+      "outputs": {
+        "auditTrail": "object",
+        "finalResponse": "object"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": false,
+        "allowRerun": false,
+        "isTerminal": true,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 60,
+        "scheduleToCloseSeconds": 300
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 2
+      }
+    },
+    {
+      "id": "action_compensation",
+      "type": "ACTION",
+      "name": "Compensate Failed Send",
+      "inputs": {
+        "messageId": "ref(action.messageId)"
+      },
+      "outputs": {
+        "compensationStatus": "string"
+      },
+      "taskQueue": "comm_template_tasks",
+      "policy": {
+        "allowFailure": true,
+        "allowRerun": false,
+        "isTerminal": false,
+        "replanCheckpoint": false
+      },
+      "timeouts": {
+        "startToCloseSeconds": 60,
+        "scheduleToCloseSeconds": 300
+      },
+      "retryPolicy": {
+        "initialIntervalSeconds": 1,
+        "backoffCoefficient": 2.0,
+        "maximumAttempts": 1
+      }
+    }
+  ],
+  "edges": [
+    {
+      "from": "planner",
+      "to": "validate",
+      "on": "success",
+      "condition": null
+    },
+    {
+      "from": "validate",
+      "to": "governance",
+      "on": "success",
+      "condition": null
+    },
+    {
+      "from": "governance",
+      "to": "retrieve",
+      "on": "success",
+      "condition": null
+    },
+    {
+      "from": "retrieve",
+      "to": "template_map",
+      "on": "success",
+      "condition": null
+    },
+    {
+      "from": "template_map",
+      "to": "transform",
+      "on": "success",
+      "condition": null
+    },
+    {
+      "from": "transform",
+      "to": "decide",
+      "on": "success",
+      "condition": null
+    },
+    {
+      "from": "decide",
+      "to": "action",
+      "on": "success",
+      "condition": null
+    },
+    {
+      "from": "action",
+      "to": "finalize",
+      "on": "success",
+      "condition": null
+    }
+  ],
+  "executionSettings": {
+    "timeoutMinutes": 30,
+    "enableProgressTracking": true,
+    "enableCompensation": true,
+    "enableReplanning": true
+  }
+}
