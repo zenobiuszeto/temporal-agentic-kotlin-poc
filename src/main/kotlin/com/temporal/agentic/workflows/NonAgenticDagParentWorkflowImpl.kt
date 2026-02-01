@@ -30,6 +30,10 @@ class NonAgenticDagParentWorkflowImpl : NonAgenticDagParentWorkflow {
         
         val initialData = TreeMap<String, Any>()
         request.data?.let { initialData.putAll(it) }
+        // Add request fields to context
+        request.eventType?.let { initialData["eventType"] = it }
+        request.channel?.let { initialData["channel"] = it }
+        request.locale?.let { initialData["locale"] = it }
         context.data = initialData
         
         for (node in dagSpec.nodes) {
@@ -106,7 +110,7 @@ class NonAgenticDagParentWorkflowImpl : NonAgenticDagParentWorkflow {
                 )
                 
                 val snapshot = mergeEngine.captureContextSnapshot(context)
-                val nodeInputs = resolveNodeInputs(nodeDef, nodeMap(), context)
+                val nodeInputs = resolveNodeInputs(nodeDef, context)
                 
                 val childRequest = NodeExecutionRequest(
                     workflowRunId = Workflow.getInfo().workflowId,
@@ -147,7 +151,6 @@ class NonAgenticDagParentWorkflowImpl : NonAgenticDagParentWorkflow {
     
     private fun resolveNodeInputs(
         nodeDef: NodeDefinition,
-        nodeMap: Map<String, NodeDefinition>,
         context: WorkflowContext
     ): Map<String, Any> {
         val resolved = TreeMap<String, Any>()
@@ -160,7 +163,8 @@ class NonAgenticDagParentWorkflowImpl : NonAgenticDagParentWorkflow {
                     resolveContextPath(refPath, context)?.let { resolved[key] = it }
                 }
                 value == "required" -> {
-                    // Will be filled from input request
+                    // Get from context data
+                    context.data[key]?.let { resolved[key] = it }
                 }
                 else -> {
                     resolved[key] = value

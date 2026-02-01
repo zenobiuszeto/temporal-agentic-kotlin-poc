@@ -18,7 +18,6 @@ class DagExecutor {
             totalNodes = dagSpec.nodes.size
         )
         
-        val levels = topologyComputer.computeTopologicalLevels(dagSpec)
         val nodeStatuses = TreeMap<String, String>()
         
         for (node in dagSpec.nodes) {
@@ -59,7 +58,7 @@ class DagExecutor {
         return map
     }
     
-    fun shouldReplan(currentSpec: DagSpec, completedNode: NodeDefinition): Boolean {
+    fun shouldReplan(completedNode: NodeDefinition): Boolean {
         return completedNode.policy?.replanCheckpoint == true
     }
     

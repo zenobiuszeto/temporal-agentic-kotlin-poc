@@ -76,40 +76,46 @@ class AgenticDagParentWorkflowImpl : AgenticDagParentWorkflow {
         val executedNodes = mutableSetOf<String>()
         
         while (true) {
-            val plan = dagExecutor.planExecution(currentDagSpec, context)
-            if (plan.stages.isEmpty()) {
+            // Get ready nodes based on what's been executed
+            val readyNodes = dagExecutor.getTopologyComputer()
+                .getReadyNodes(currentDagSpec, nodeStatuses, context, dagExecutor.getConditionEvaluator())
+            
+            if (readyNodes.isEmpty()) {
                 break
             }
             
-            for (stage in plan.stages) {
-                val futures = mutableListOf<Promise<NodeExecutionResponse?>>()
-                
-                for (nodeId in stage.nodeIds) {
-                    if (nodeId !in executedNodes) {
-                        nodeStatuses[nodeId] = "RUNNING"
-                        futures.add(executeNodeAsync(nodeId, nodeMap[nodeId]!!))
-                    }
-                }
-                
-                if (futures.isNotEmpty()) {
-                    Promise.allOf(futures).get()
-                    
-                for (future in futures) {
-                    try {
-                        val response = future.get()
-                        if (response != null) {
-                            executedNodes.add(response.nodeId!!)
-                            mergeContextFromResponse(response)
-                            
-                            val nodeDef = nodeMap[response.nodeId]
-                            if (nodeDef?.policy?.replanCheckpoint == true) {
-                                logger.info("Replan checkpoint reached at node {}", response.nodeId)
-                            }
+            // Take up to maxParallelNodes nodes for this batch
+            val nodesToExecute = readyNodes
+                .filter { !executedNodes.contains(it) }
+                .take(currentDagSpec.maxParallelNodes)
+            
+            if (nodesToExecute.isEmpty()) {
+                break
+            }
+            
+            val futures = mutableListOf<Promise<NodeExecutionResponse?>>()
+            
+            for (nodeId in nodesToExecute) {
+                nodeStatuses[nodeId] = "RUNNING"
+                futures.add(executeNodeAsync(nodeId, nodeMap[nodeId]!!))
+            }
+            
+            Promise.allOf(futures).get()
+            
+            for (future in futures) {
+                try {
+                    val response = future.get()
+                    if (response != null) {
+                        executedNodes.add(response.nodeId!!)
+                        mergeContextFromResponse(response)
+                        
+                        val nodeDef = nodeMap[response.nodeId]
+                        if (nodeDef?.policy?.replanCheckpoint == true) {
+                            logger.info("Replan checkpoint reached at node {}", response.nodeId)
                         }
-                    } catch (e: Exception) {
-                        logger.error("Failed to get node response", e)
                     }
-                }
+                } catch (e: Exception) {
+                    logger.error("Failed to get node response", e)
                 }
             }
         }
