@@ -51,32 +51,42 @@ class NonAgenticDagParentWorkflowImpl : NonAgenticDagParentWorkflow {
     
     private fun executeDAG() {
         val nodeMap = dagExecutor.buildNodeMap(dagSpec)
-        val executedNodes = mutableListOf<String>()
+        val executedNodes = mutableSetOf<String>()
         
         while (true) {
-            val plan = dagExecutor.planExecution(dagSpec, context)
-            if (plan.stages.isEmpty()) {
+            // Get ready nodes based on what's been executed
+            val readyNodes = dagExecutor.getTopologyComputer()
+                .getReadyNodes(dagSpec, nodeStatuses, context, dagExecutor.getConditionEvaluator())
+            
+            if (readyNodes.isEmpty()) {
                 break
             }
             
-            for (stage in plan.stages) {
-                val futures = mutableListOf<Promise<NodeExecutionResponse>>()
-                
-                for (nodeId in stage.nodeIds) {
-                    nodeStatuses[nodeId] = "RUNNING"
-                    futures.add(executeNodeAsync(nodeId, nodeMap[nodeId]!!))
-                }
-                
-                Promise.allOf(futures).get()
-                
-                for (future in futures) {
-                    try {
-                        val response = future.get()
-                        executedNodes.add(response.nodeId!!)
-                        mergeContextFromResponse(response)
-                    } catch (e: Exception) {
-                        logger.error("Failed to get node response", e)
-                    }
+            // Take up to maxParallelNodes nodes for this batch
+            val nodesToExecute = readyNodes
+                .filter { !executedNodes.contains(it) }
+                .take(dagSpec.maxParallelNodes)
+            
+            if (nodesToExecute.isEmpty()) {
+                break
+            }
+            
+            val futures = mutableListOf<Promise<NodeExecutionResponse>>()
+            
+            for (nodeId in nodesToExecute) {
+                nodeStatuses[nodeId] = "RUNNING"
+                futures.add(executeNodeAsync(nodeId, nodeMap[nodeId]!!))
+            }
+            
+            Promise.allOf(futures).get()
+            
+            for (future in futures) {
+                try {
+                    val response = future.get()
+                    executedNodes.add(response.nodeId!!)
+                    mergeContextFromResponse(response)
+                } catch (e: Exception) {
+                    logger.error("Failed to get node response", e)
                 }
             }
         }

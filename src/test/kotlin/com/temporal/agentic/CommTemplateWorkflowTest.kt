@@ -44,14 +44,18 @@ class CommTemplateWorkflowTest {
     }
     
     private fun loadSpecs() {
-        val mapper = ObjectMapper()
+        val mapper = ObjectMapper().apply {
+            findAndRegisterModules() // This registers the Kotlin module
+        }
         
         val nonAgenticInputStream = javaClass.classLoader
             .getResourceAsStream("specs/non_agentic_comm_template.json")
+            ?: throw IllegalStateException("Could not load non_agentic_comm_template.json")
         nonAgenticSpec = mapper.readValue(nonAgenticInputStream, DagSpec::class.java)
         
         val agenticInputStream = javaClass.classLoader
             .getResourceAsStream("specs/agentic_comm_template.json")
+            ?: throw IllegalStateException("Could not load agentic_comm_template.json")
         agenticSpec = mapper.readValue(agenticInputStream, DagSpec::class.java)
     }
     

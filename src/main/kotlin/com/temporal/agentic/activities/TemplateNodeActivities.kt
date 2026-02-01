@@ -2,7 +2,9 @@ package com.temporal.agentic.activities
 
 import com.temporal.agentic.models.NodeExecutionRequest
 import com.temporal.agentic.models.NodeExecutionResponse
+import io.temporal.activity.ActivityInterface
 
+@ActivityInterface
 interface TemplateNodeActivities {
     
     fun executeValidate(request: NodeExecutionRequest): NodeExecutionResponse
